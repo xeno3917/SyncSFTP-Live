@@ -24,8 +24,8 @@ When you wish to sync you can either push or pull files to the SFTP using:
 
 This process is destructive on the SFTP, and moves local files to your .trash folder.
 
-### Questions
-If you have any questions or requests, please open a GitHub issue in this repository!
+### Support
+I am no longer supporting this plugin.
 
 ### License
 This project is under the [MIT](https://en.wikipedia.org/wiki/MIT_License) license.
