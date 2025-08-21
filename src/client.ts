@@ -1,21 +1,40 @@
-import Client from 'ssh2-sftp-client';
-import { SocksClient } from 'socks';
+import SFTPClientLib from 'ssh2-sftp-client';
+import { SocksClient, SocksClientOptions, SocksProxy } from 'socks';
+
+type SFTPConnectOptions = {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  proxy_host?: string;
+  proxy_port?: number;
+};
+
+type RemoteFileInfo = {
+  name: string;
+  mtime: number;
+  type: string;
+  size: number;
+  path: string;
+};
 
 export default class SFTPClient {
+  private client: SFTPClientLib;
+
   constructor() {
-    this.client = new Client();
+    this.client = new SFTPClientLib();
   }
 
-  async connect(options) {
+  async connect(options: SFTPConnectOptions): Promise<void> {
     console.log(`Connecting to ${options.host}:${options.port}`);
     try {
-      if (options.proxy_host !== '') {
-        let opt = {
+      if (options.proxy_host && options.proxy_host !== '') {
+        const opt: SocksClientOptions = {
           proxy: {
             host: options.proxy_host,
-            port: options.proxy_port,
+            port: options.proxy_port as number,
             type: 5,
-          },
+          } as SocksProxy,
           command: 'connect',
           destination: {
             host: options.host,
@@ -42,36 +61,41 @@ export default class SFTPClient {
       }
     } catch (err) {
       console.log('Failed to connect:', err);
-      return(`Failed to connect:\n${err}`);
+      throw new Error(`Failed to connect: ${err}`);
     }
-    return('Connected to SFTP');
+    return;
   }
 
-  async disconnect() {
+  async disconnect(): Promise<string> {
     console.log(`Disconnecting from SFTP.`);
     await this.client.end();
     return 'Disconnected from SFTP';
   }
 
-  async listFiles(remoteDir, fileGlob) {
-    let fileObjects;
+  async listFiles(remoteDir: string, fileGlob?: string): Promise<RemoteFileInfo[]> {
+    let fileObjects: any[] = [];
     try {
-      fileObjects = await this.client.list(remoteDir, fileGlob);
+      if (fileGlob) {
+        // @ts-ignore - second arg can be glob or filter function
+        fileObjects = await this.client.list(remoteDir, fileGlob as any);
+      } else {
+        fileObjects = await this.client.list(remoteDir);
+      }
     } catch (err) {
       console.log('Listing failed:', err);
     }
 
-    var fileNames = [];
+    var fileNames: RemoteFileInfo[] = [];
 
     for (const file of fileObjects) {
       if (file.type === 'd') {
         console.log(`${new Date(file.modifyTime).toISOString()} PRE ${file.name}`);
         fileNames.push({
-          'name': file.name,
-          'mtime': file.modifyTime,
-          'type': file.type,
-          'size': file.size,
-          'path': remoteDir
+          name: file.name,
+          mtime: file.modifyTime,
+          type: file.type,
+          size: file.size,
+          path: remoteDir
         });
         
         let subFiles = await this.listFiles(`${remoteDir}/${file.name}`);
@@ -79,11 +103,11 @@ export default class SFTPClient {
       } else {
         console.log(`${new Date(file.modifyTime).toISOString()} ${file.size} ${file.name}`);
         fileNames.push({
-          'name': file.name,
-          'mtime': file.modifyTime,
-          'type': file.type,
-          'size': file.size,
-          'path': remoteDir
+          name: file.name,
+          mtime: file.modifyTime,
+          type: file.type,
+          size: file.size,
+          path: remoteDir
         });
       }      
     }
@@ -91,7 +115,7 @@ export default class SFTPClient {
     return fileNames;
   }
 
-  async uploadFile(localFile, remoteFile) {
+  async uploadFile(localFile: string, remoteFile: string): Promise<string> {
     console.log(`Uploading ${localFile} to ${remoteFile}`);
     try {
       await this.client.put(localFile, remoteFile);
@@ -102,7 +126,7 @@ export default class SFTPClient {
     return `Uploading success for\n${localFile}`;
   }
 
-  async downloadFile(remoteFile, localFile) {
+  async downloadFile(remoteFile: string, localFile: string): Promise<string> {
     console.log(`Downloading ${remoteFile} to ${localFile}`);
     try {
       await this.client.get(remoteFile, localFile);
@@ -113,7 +137,7 @@ export default class SFTPClient {
     return `Downloading success for\n${localFile}`;
   }
 
-  async makeDir(remoteDir) {
+  async makeDir(remoteDir: string): Promise<string> {
     console.log(`Creating directory ${remoteDir}`);
     try {
       await this.client.mkdir(remoteDir, true);
@@ -124,7 +148,7 @@ export default class SFTPClient {
     return `Successfully made directory:\n${remoteDir}`;
   }
 
-  async removeDir(remoteDir) {
+  async removeDir(remoteDir: string): Promise<string> {
     console.log(`Deleting directory ${remoteDir}`);
     try {
       await this.client.rmdir(remoteDir, true);
@@ -136,7 +160,7 @@ export default class SFTPClient {
 
   }
 
-  async deleteFile(remoteFile) {
+  async deleteFile(remoteFile: string): Promise<string> {
     console.log(`Deleting ${remoteFile}`);
     try {
       await this.client.delete(remoteFile);
@@ -147,14 +171,14 @@ export default class SFTPClient {
     return `Delete success for\n${remoteFile}`;
   }
 
-  async fileExists(remoteFile) {
+  async fileExists(remoteFile: string): Promise<boolean> {
     console.log(`Checking if ${remoteFile} exists`);
-    let exists = false;
+    let exists: any = false;
     try {
       exists = await this.client.exists(remoteFile);
     } catch (err) {
       console.error('Exists check failed:', err);
     }
-    return exists;
+    return Boolean(exists);
   }
 }
